@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ar-SA">
+<head>
+  <title>تحميل من اليوتيوب</title>
+
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <link rel="shortcut icon" type="image/png" href="img/funsksa.png"/>
+
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+<div align="center">
+  <script src="js/angular.min.js"></script>
+<style>
+.content {
+    max-width: 80%;
+    margin: auto;
+	    text-align: center;
+
+}
+</style>
+
+<body>
+<div class="content">
+<div align="center">
+
+</head>
+
+<body ng-app="App">
+
+<nav class="navbar navbar-expand-sm navbar-toggleable-md bg-dark navbar-dark">
+ <div align="center"><html dir=rtl> <a class="navbar-brand" href="./">
+    تحميل من اليوتيوب
+  </a>
+</nav>
+
+<br>
+
+<div class="container-fluid" ng-controller="Controle">
+    <div class="row" ng-show="mostrarTelaInserirURL">
+        <div class="col-md-8 offset-md-2">
+            <div class="container-fluid">
+                <h1>{{mensagemTelaInicial}}</h1>
+                <hr>
+
+                <div class="alert alert-danger" id='mensagemErroConexao' style="display: none; text-align: center;">
+                    <strong>خطأ</strong> فشل الاتصال بالخادم
+                </div>
+                <div class="alert alert-danger" id='mensagemErro' style="display: none; text-align: center;">
+                    <strong>خطأ</strong> الفيديو غير موجود
+                </div>
+
+                <form ng-submit="executar()">
+                  <div class="form-group">
+                    <label for="formGroupExampleInput">أدخل رابط الفيديو</label>
+                    <input type="text" class="form-control" ng-model="urlVideo" placeholder="رابط الفيديو">
+                  </div>
+                  <button type="submit" class="btn btn-primary float-right" style="cursor: pointer;">تحميل</button>
+                </form>
+
+            </div>
+        </div>
+    </div>
+    <div class="row" ng-show="mostrarTelaDownload">
+        <div class="col-md-8 offset-md-2">
+            <div class="container-fluid">
+                <h1>اختر الجودة</h1>
+                <hr>
+                <table class="table table-dark table-hover table-responsive-sm">
+                    <thead>
+                        <tr>
+                            <td>الجودة</td>
+                            <td>النوع</td>
+                            <td>التحميل</td>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr ng-repeat="x in infos">
+                            <td>{{x.qualidade}}</td>
+                            <td>{{x.tipo}}</td>
+                            <td>
+                                <a href="{{x.url}}" download>
+                                    <button class="btn btn-primary" style="cursor: pointer;">تحميل</button>
+                                </a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button class="btn btn-success float-right" ng-click="voltar()" style="cursor: pointer;">عودة</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    /*
+        Author: Matheus Alves de Andrade
+     */
+   var app = angular.module("App", []);
+   app.service('requisitarInfos', function($http) {
+        this.proxyCors = 'https://cors.io/?';                       //Um proxy para burlar cors
+        this.url = 'http://youtube.com/get_video_info?video_id=';   //A API do youtube que retorna informações de um vídeo
+        this.get = function (cod, sucesso, falha) {
+            $http({
+                method: 'GET',
+                url: this.proxyCors+this.url+cod // consultado a api através do proxy
+            }).then(sucesso, falha);
+        }
+    });
+    app.service('decodificar', function() {
+        /*
+            Essa fução recebe uma QueryString e retorna um array associativo equivalente
+        */
+        this.queryString = function (queryRaw) {
+            let interador = (new URLSearchParams(queryRaw)).entries(); // Suportado somente por Chrome >= 29.0 e Firefox >= 44.0
+            let retorno = [];
+            for(let elemento of interador) {
+                retorno[elemento[0]] = elemento[1]; // associando cada chave a seu valor
+            }
+            return retorno;
+        }
+    });
+    app.service('mensagemERRO', function() {
+      this.conexaoServidor = function () {
+        document.getElementById('mensagemErroConexao').style.display = 'block';
+        setTimeout(function(){document.getElementById('mensagemErroConexao').style.display = 'none';}, 5000);
+      };
+      this.erroNaConsulta = function () {
+        document.getElementById('mensagemErro').style.display = 'block';
+        setTimeout(function(){document.getElementById('mensagemErro').style.display = 'none';}, 5000);
+      };
+    });
+    //#########INICIO DO CONTROLLER#############
+    app.controller("Controle", function($scope, requisitarInfos, mensagemERRO, decodificar) {
+        $scope.infos = null;
+        $scope.mostrarTelaDownload = false;
+        $scope.mostrarTelaInserirURL = true;
+        $scope.mensagemTelaInicial = 'تحميل الفيديو';
+        /*
+            Esta fuñção recebe um código de vídeo do youtube e transforma as informações sobre ele em um object no formato:
+            {
+                tipo: "O formato do arquivo de vídeo",
+                qualidade: "Uma string que informa a qualidade do vídeo",
+                url: "A url de download do vídeo",
+            }
+            as informações vão ser salvas em $scope.infos ao final da execução
+        */
+        $scope.getInfos = function (cod) {
+            $scope.mensagemTelaInicial = 'جاري التحميل ...'; // Avisando o usuário que a busca está sendo feita
+            requisitarInfos.get(cod, // requisitando a API
+                function (dados){ // Callback de sucesso na requisição
+                    dados = dados.data; //descartando informações desnescesárias
+                    let dadosTratados = decodificar.queryString(dados); // Todas as informações retornadas
+                    let videos  = dadosTratados['url_encoded_fmt_stream_map'].split(','); // filtrando só o que é nescesário
+                    $scope.infos = videos.map(function (valor) { // percorrendo os formatos de vídeo retornados pela api
+                        let elemento = decodificar.queryString(valor); // Decodificando novamente do formato querystring para vetor associativo
+                        return { // retornando um objeto como descrito anteriormente
+                            qualidade: elemento.quality,
+                            tipo: elemento.type.split(';')[0],
+                            url: elemento.url
+                        };
+                    });
+                    $scope.exibirTelaDownload(); // Pronto para executar o download
+                },
+                function(dados) { // Callback de erro na requisição
+                    $scope.mensagemTelaInicial = 'تحميل الفيديو';
+                    mensagemERRO.conexaoServidor();
+                }
+            );
+        };
+        $scope.executar = function() {
+            let codRaw = $scope.urlVideo.split('?')[1];
+            if(codRaw === undefined) {
+                mensagemERRO.erroNaConsulta();
+                return false;
+            }
+            let cod = decodificar.queryString(codRaw)['v'];
+            if(cod === undefined) {
+                mensagemERRO.erroNaConsulta();
+                return false;
+            }
+            //Chegando neste ponto cod está ok
+            $scope.getInfos(cod);
+        };
+        $scope.voltar = function() {
+            $scope.mensagemTelaInicial = 'تحميل الفيديو';
+            $scope.exibirTelaBusca();
+            $scope.urlVideo = '';
+            $scope.infos = null;
+        };
+        $scope.exibirTelaBusca = function() {
+            $scope.mostrarTelaDownload = false;
+            $scope.mostrarTelaInserirURL = true;
+        };
+        $scope.exibirTelaDownload = function() {
+            $scope.mostrarTelaDownload = true;
+            $scope.mostrarTelaInserirURL = false;
+        };
+    });
+</script>
+</div>
+</body>
+</html>
